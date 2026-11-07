@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Climbing Helper tests</title>
+  <style>body { font: 14px monospace; padding: 16px; background: #fff; color: #000; } .fail { color: #c00; } .pass { color: #080; }</style>
+</head>
+<body>
+<pre id="out">running…</pre>
+<script src="logic.js"></script>
+<script>
+"use strict";
+const L = window.Logic, F = L.F;
+const lines = [];
+let passed = 0, failed = 0;
+function check(name, cond, detail) {
+  if (cond) passed++; else { failed++; lines.push("FAIL " + name + (detail ? " — " + detail : "")); }
+}
+
+// ---------------------------------------------------------------- damage
+const official = {
+  1: "4 2 2 1 <1 <1 <1 <1 <1", 2: "37 19 13 10 8 7 6 5 5", 3: "X 66 44 33 27 22 19 17 15",
+  4: "X X X 82 65 55 47 41 37", 5: "X X X X X X 94 83 74",
+};
+for (const h in official) official[h].split(" ").forEach((exp, k) => {
+  const d = L.roundedDamage(+h, String(k + 1), 100, F(0));
+  const ok = exp === "X" ? L.cmp(d, F(100)) >= 0 : exp === "<1" ? L.cmp(d, F(1)) < 0 : L.cmp(d, F(+exp)) === 0;
+  check(`official h${h} lv${k + 1}`, ok, `got ${L.num(d)} want ${exp}`);
+});
+["<1", "4", "12", "30", "59"].forEach((exp, k) => {
+  const d = L.roundedDamage(k + 1, "9+", 100, F(0));
+  check(`players 9+ h${k + 1}`, exp === "<1" ? L.cmp(d, F(1)) < 0 : L.cmp(d, F(+exp)) === 0, `got ${L.num(d)}`);
+});
+// a few player-chart cells for young ages (incl. .5 rounding)
+check("age<3 lv1 h2 55.5->56", L.cmp(L.roundedDamage(2, "1", 20, F(0)), F(56)) === 0);
+check("age<3 9+ h5 88.8", Math.abs(L.num(L.exactDamage(5, "9+", 20, F(0))) - 88.8) < 1e-12);
+check("age3-6 lv9 h4 44.4", Math.abs(L.num(L.exactDamage(4, "9", 50, F(0))) - 44.4) < 1e-12);
+check("fmt 59 (59.2)", L.fmtDamage(L.roundedDamage(5, "9+", 100, F(0)), L.exactDamage(5, "9+", 100, F(0))) === "59 (59.2)");
+check("fmt <1 (0.36)", L.fmtDamage(L.roundedDamage(1, "9+", 100, F(0)), L.exactDamage(1, "9+", 100, F(0))) === "<1 (0.36)");
+check("worst case 59.2", L.cmp(L.worstCaseDamage(5, "9+", 100, F(0)), F(296, 5)) === 0);
+check("59.1 HP h5 9+ is fatal", L.fallStatus(L.sub(L.parseDecimal("59.1"), L.worstCaseDamage(5, "9+", 100, F(0)))) === "fatal");
+check("parse 12,5", L.cmp(L.parseDecimal("12,5"), F(25, 2)) === 0);
+check("parse rejects junk", L.parseDecimal("abc") === null && L.parseDecimal("-3") === null);
+check("buff 12.34% exact", L.cmp(L.exactDamage(5, "1", 100, L.parseDecimal("12.34")), F(658 * 8766, 10000)) === 0);
+
+// ---------------------------------------------------------------- solver basics
+{
+  const cells = Array(60).fill(null);
+  cells[0] = 1; // A1 = 1, height 1 -> B1 safe; A2/B2: one of them dangerous
+  const a = L.analyse(cells, 1, 0);
+  check("basic: asks for safe neighbours", a.ask.includes(1) && a.ask.length === 4, JSON.stringify(a.ask));
+  check("basic: no conflict", a.conflicts.length === 0);
+  check("basic: A2/B2 50%", Math.abs(a.prob[10] - 0.5) < 1e-9 && Math.abs(a.prob[11] - 0.5) < 1e-9);
+}
+{
+  const cells = Array(60).fill(null);
+  cells[0] = 1; cells[1] = 1; cells[2] = 1; cells[3] = 0; cells[4] = 0; // D1=0 clears C2,D2 -> C1=1 forces B2
+  const a = L.analyse(cells, 1, 4);
+  check("deduce: B2 dangerous", a.deducedMine[11], "");
+  check("deduce: A2 safe", a.deducedSafe[10]);
+  check("deduce: C2 safe", a.deducedSafe[12]);
+}
+{
+  const cells = Array(60).fill(null);
+  cells[0] = 0; cells[10] = "D";
+  check("conflict detected", L.analyse(cells, 1, 0).conflicts.includes(0));
+}
+{
+  // A1=0, C1=0 (height 1): B1's neighbours are all known safe -> B1 is certainly 0
+  const cells = Array(60).fill(null);
+  cells[0] = 0; cells[2] = 0;
+  const a = L.analyse(cells, 1, 2);
+  check("derived: B1 = 0", a.derived[1] === 0, String(a.derived[1]));
+  check("derived: B1 not asked", !a.ask.includes(1));
+  check("derived: D1 unknown number still asked", a.ask.includes(3));
+}
+{
+  // wall-perpendicular: A3-B3 (row pointing into the left wall) yes; A3-A4 (along the wall) no
+  const c = (name) => "ABCDEFGHIJ".indexOf(name[0]) + (parseInt(name.slice(1), 10) - 1) * 10;
+  check("wall: A3-B3", L.isWallPerpendicular(c("A3"), c("B3")));
+  check("wall: B3-A3", L.isWallPerpendicular(c("B3"), c("A3")));
+  check("wall: E6-E5 (bottom)", L.isWallPerpendicular(c("E6"), c("E5")));
+  check("wall: A3-A4 is along the wall", !L.isWallPerpendicular(c("A3"), c("A4")));
+  check("wall: C3-D3 no wall", !L.isWallPerpendicular(c("C3"), c("D3")));
+  check("wall: diagonal never", !L.isWallPerpendicular(c("A3"), c("B4")));
+  const base = { distance: 1, info: 2, chance: 0.5 };
+  check("score: orthogonal > diagonal", L.jumpScore({ ...base, orthogonal: true }) > L.jumpScore(base));
+  check("score: wall > plain orthogonal", L.jumpScore({ ...base, orthogonal: true, wallPerpendicular: true }) > L.jumpScore({ ...base, orthogonal: true }));
+}
+{
+  // jump pair: prefers the pair closer to the last input
+  const cells = Array(60).fill(null);
+  const a = L.analyse(cells, 2, null); // nothing known -> no pair, asks top 3
+  check("height 2 asks first 3 top cells", a.ask.join() === "0,1,2", a.ask.join());
+}
+
+{
+  // J6 walled off by dangerous I5, J5, I6 -> unreachable (red), not asked/undetermined
+  const cells = Array(60).fill(null);
+  cells[0] = 0; cells[48] = "D"; cells[49] = "D"; cells[58] = "D";
+  const a = L.analyse(cells, 1, 0);
+  check("unreachable: J6", a.unreachable[59]);
+  check("unreachable: J6 not undetermined", !a.undetermined.includes(59));
+  check("unreachable: H6 still reachable", !a.unreachable[57]);
+  // locational cells block too
+  const c2 = Array(60).fill(null);
+  c2[0] = 0; c2[48] = "L"; c2[49] = "L"; c2[58] = "D";
+  check("unreachable: blocked by locational", L.analyse(c2, 1, 0).unreachable[59]);
+}
+
+// ---------------------------------------------------------------- random simulated games
+function rng(seed) { return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296; }
+let games = 0, solved = 0, stuck = 0, wrong = 0, hints = 0, maxMs = 0;
+const derivedSeen = new Set();
+for (let g = 0; g < 400; g++) {
+  const rand = rng(1000 + g);
+  const height = 1 + (g % 5);
+  const density = 0.12 + rand() * 0.2;
+  const truth = Array(60).fill("S");
+  for (let i = 0; i < 60; i++) {
+    if (L.isGuaranteedSafe(i, height)) continue;
+    const x = rand();
+    if (x < 0.06) truth[i] = "L"; else if (x < 0.06 + density) truth[i] = "M";
+  }
+  const number = (i) => L.NEIGHBOURS[i].filter((j) => truth[j] === "M").length;
+  const cells = Array(60).fill(null);
+  for (let i = 0; i < 60; i++) if (truth[i] === "L") cells[i] = "L";
+  let last = null, steps = 0, outcome = "stuck";
+  games++;
+  while (steps++ < 500) {
+    const t0 = performance.now();
+    const a = L.analyse(cells, height, last);
+    maxMs = Math.max(maxMs, performance.now() - t0);
+    for (let i = 0; i < 60; i++) {
+      if (a.deducedMine[i] && truth[i] !== "M") { wrong++; lines.push(`FAIL game ${g}: ${L.cellName(i)} wrongly deduced dangerous`); }
+      if (a.deducedSafe[i] && truth[i] === "M") { wrong++; lines.push(`FAIL game ${g}: ${L.cellName(i)} wrongly deduced safe`); }
+      if (a.derived[i] != null) {
+        if (truth[i] === "M" || a.derived[i] !== number(i)) { wrong++; lines.push(`FAIL game ${g}: ${L.cellName(i)} calculated ${a.derived[i]}, real ${truth[i] === "M" ? "dangerous" : number(i)}`); }
+        derivedSeen.add(g * 100 + i);
+      }
+    }
+    if (a.conflicts.length) { wrong++; lines.push(`FAIL game ${g}: false conflict ${a.conflicts.map(L.cellName)}`); break; }
+    if (a.done) { outcome = "solved"; break; }
+    if (a.ask.length) {
+      for (const i of a.ask) {
+        if (truth[i] === "M") { wrong++; lines.push(`FAIL game ${g}: asked to step on dangerous ${L.cellName(i)}`); }
+        cells[i] = number(i); last = i;
+      }
+      continue;
+    }
+    if (a.pair) {
+      // simulate hints: random dangerous neighbour of either cell, until a new one appears
+      const around = [...new Set(a.pair.flatMap((p) => L.NEIGHBOURS[p]))].filter((j) => truth[j] === "M");
+      const fresh = around.filter((j) => cells[j] !== "D" && !a.deducedMine[j]);
+      if (!fresh.length) { wrong++; lines.push(`FAIL game ${g}: useless jump pair`); break; }
+      const pick = fresh[Math.floor(rand() * fresh.length)];
+      cells[pick] = "D"; last = a.pair[0]; hints++;
+      continue;
+    }
+    break;
+  }
+  if (outcome === "solved") solved++; else stuck++;
+}
+check("simulated games: no wrong deductions", wrong === 0, wrong + " errors");
+
+lines.unshift(`${failed ? "SOME TESTS FAILED" : "ALL TESTS PASSED"}: ${passed} passed, ${failed} failed`,
+  `simulated ${games} games: ${solved} fully solved, ${stuck} stopped (cells unreachable safely), ${hints} hints used, ${derivedSeen.size} numbers calculated automatically, slowest analyse ${maxMs.toFixed(1)} ms`);
+const out = document.getElementById("out");
+out.textContent = lines.join("\n");
+out.className = failed ? "fail" : "pass";
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Climbing Helper</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <p id="storage-warning" class="storage-warning" hidden></p>
+  <main class="layout">
+    <!-- ============================================ part 1: character -->
+    <section class="panel" id="character">
+      <h2 data-t="characterTitle"></h2>
+      <div class="form">
+        <label for="age" data-t="ageLabel"></label>
+        <input id="age" inputmode="decimal" autocomplete="off">
+        <p class="note full" id="age-note"></p>
+
+        <label for="level" data-t="levelLabel"></label>
+        <select id="level"></select>
+        <p class="note full" data-t="levelHint"></p>
+
+        <label for="buff" data-t="buffLabel"></label>
+        <input id="buff" inputmode="decimal" autocomplete="off">
+
+        <label for="hp" id="hp-label"></label>
+        <input id="hp" inputmode="decimal" autocomplete="off">
+      </div>
+
+      <hr>
+      <p id="result" class="result"></p>
+      <p id="warning" class="warning"></p>
+
+      <h2 data-t="allHeightsTitle"></h2>
+      <table class="heights">
+        <thead><tr><th data-t="colHeight"></th><th data-t="colDamage"></th><th data-t="colHpLeft"></th></tr></thead>
+        <tbody id="heights-body"></tbody>
+      </table>
+      <p class="made-by" data-t="madeBy"></p>
+    </section>
+
+    <!-- ============================================ part 2: field -->
+    <section class="panel" id="field-panel">
+      <h2 data-t="fieldTitle"></h2>
+
+      <div class="tabs" id="location-tabs"></div>
+      <div class="tab-actions">
+        <button id="rename-location" data-t="renameButton"></button>
+        <button id="delete-location" data-t="deleteLocation"></button>
+      </div>
+
+      <div class="tabs sub" id="height-tabs"></div>
+      <div class="tab-actions">
+        <button id="rename-height" data-t="renameButton"></button>
+        <button id="delete-height" data-t="deleteHeight"></button>
+      </div>
+
+      <p id="guide" class="guide"></p>
+
+      <div class="field-wrap">
+        <div id="field" class="field" role="grid"></div>
+        <div id="lock" class="lock" hidden>
+          <div class="lock-box">
+            <p id="lock-title" class="lock-title"></p>
+            <p id="lock-body"></p>
+            <button id="lock-confirm" data-t="lockConfirm"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <span data-t="modesTitle"></span>
+        <div id="modes" class="modes"></div>
+      </div>
+      <div class="toolbar">
+        <button id="phase-button"></button>
+        <button id="undo" data-t="undo"></button>
+        <button id="reset-field" data-t="resetField"></button>
+      </div>
+      <p class="note" data-t="keyboardHint"></p>
+
+      <div class="legend">
+        <span data-t="legendTitle"></span>
+        <span><i class="swatch ask"></i><span data-t="legendAsk"></span></span>
+        <span><i class="swatch danger"></i><span data-t="legendDanger"></span></span>
+        <span><i class="swatch danger unreachable"></i><span data-t="legendUnreachable"></span></span>
+        <span><i class="swatch jump"></i><span data-t="legendJump"></span></span>
+        <span><i class="swatch loc"></i><span data-t="legendLocational"></span></span>
+        <span><i class="swatch unknown"></i><span data-t="legendUnknown"></span></span>
+        <span><i class="swatch derived">3</i><span data-t="legendDerived"></span></span>
+        <span><i class="swatch unknown prob-sample">25%</i><span data-t="legendRisk"></span></span>
+      </div>
+
+      <div class="toolbar save-tools">
+        <button id="export" data-t="exportButton"></button>
+        <button id="import" data-t="importButton"></button>
+        <input id="import-file" type="file" accept=".json,application/json" hidden>
+      </div>
+    </section>
+  </main>
+
+  <script src="texts.js"></script>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
